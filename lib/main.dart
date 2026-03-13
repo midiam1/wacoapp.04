@@ -6,22 +6,22 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 void main() {
-  initializeDateFormatting('es_ES', null).then((_) => runApp(const MyApp()));
+  initializeDateFormatting('es_ES', null).then((_) => runApp(const WacoApp()));
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class WacoApp extends StatelessWidget {
+  const WacoApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Flutter Demo',
+      title: 'Waco 0.4',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'WacoApp'),
+      home: const MyHomePage(title: 'Waco 0.4'),
     );
   }
 }
@@ -65,7 +65,7 @@ class _MyHomePageState extends State<MyHomePage> {
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: AlertDialog(
             backgroundColor: Colors.black.withOpacity(0.5),
-            title: const Text('Acerca de WacoApp', style: TextStyle(color: Colors.white)),
+            title: const Text('Acerca de Waco 0.4', style: TextStyle(color: Colors.white)),
             content: const Text('Esta es una aplicación de demostración de Flutter.', style: TextStyle(color: Colors.white)),
             actions: <Widget>[
               TextButton(
