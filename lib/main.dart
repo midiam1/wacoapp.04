@@ -1,13 +1,41 @@
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:provider/provider.dart';
 
 void main() {
-  initializeDateFormatting('es_ES', null).then((_) => runApp(const WacoApp()));
+  initializeDateFormatting('es_ES', null).then((_) {
+    runApp(
+      ChangeNotifierProvider(
+        create: (context) => AuthProvider(),
+        child: const WacoApp(),
+      ),
+    );
+  });
 }
+
+class AuthProvider extends ChangeNotifier {
+  String? _token;
+  String? get token => _token;
+
+  bool get isAuthenticated => _token != null;
+
+  void login(String token) {
+    _token = token;
+    notifyListeners();
+  }
+
+  void logout() {
+    _token = null;
+    notifyListeners();
+  }
+}
+
 
 class WacoApp extends StatelessWidget {
   const WacoApp({super.key});
@@ -39,11 +67,10 @@ class _MyHomePageState extends State<MyHomePage> {
   int _selectedIndex = 0;
   late Stream<DateTime> _dateTimeStream;
 
-  static const List<Widget> _widgetOptions = <Widget>[
-    InfoCard(text: 'Página de Inicio'),
-    InfoCard(text: 'Página de Literatura'),
-    InfoCard(text: 'Página de Usuario'),
-  ];
+  Widget _getUserPage(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
+    return authProvider.isAuthenticated ? const ProfilePage() : const LoginPage();
+  }
 
   @override
   void initState() {
@@ -83,6 +110,12 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> widgetOptions = <Widget>[
+      const InfoCard(text: 'Página de Inicio'),
+      const InfoCard(text: 'Página de Literatura'),
+      _getUserPage(context),
+    ];
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       extendBody: true,
@@ -133,7 +166,7 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
         ),
         child: Center(
-          child: _widgetOptions.elementAt(_selectedIndex),
+          child: widgetOptions.elementAt(_selectedIndex),
         ),
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -186,6 +219,239 @@ class InfoCard extends StatelessWidget {
       child: Text(
         text,
         style: const TextStyle(fontSize: 28, color: Colors.white, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+}
+
+class AuthService {
+  final String wordpressUrl;
+
+  AuthService(this.wordpressUrl);
+
+  Future<String?> login(String username, String password) async {
+    final url = Uri.parse('$wordpressUrl/wp-json/jwt-auth/v1/token');
+    try {
+      final response = await http.post(
+        url,
+        body: {
+          'username': username,
+          'password': password,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        return body['token'];
+      } else {
+        return null;
+      }
+    } catch (e) {
+      print('Error during login: $e');
+      return null;
+    }
+  }
+}
+
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _authService = AuthService('https://yosoyve.eterica.website');
+
+  bool _isLoading = false;
+  String? _errorMessage;
+  bool _passwordVisible = false;
+
+  void _login() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+
+      final token = await _authService.login(
+        _usernameController.text,
+        _passwordController.text,
+      );
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (token != null) {
+        Provider.of<AuthProvider>(context, listen: false).login(token);
+      } else {
+        setState(() {
+          _errorMessage = 'Usuario o contraseña incorrectos.';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24.0),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.7),
+        borderRadius: BorderRadius.circular(12.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.5),
+            spreadRadius: 5,
+            blurRadius: 7,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Acceso de Usuario',
+              style: TextStyle(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            TextFormField(
+              controller: _usernameController,
+              decoration: const InputDecoration(
+                labelText: 'Usuario o Email',
+                labelStyle: TextStyle(color: Colors.white),
+                prefixIcon: Icon(Icons.person, color: Colors.white),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white),
+                ),
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.amber),
+                ),
+              ),
+              style: const TextStyle(color: Colors.white),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Por favor, introduce tu usuario';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 20),
+            TextFormField(
+              controller: _passwordController,
+              obscureText: !_passwordVisible,
+              decoration: InputDecoration(
+                labelText: 'Contraseña',
+                labelStyle: const TextStyle(color: Colors.white),
+                prefixIcon: const Icon(Icons.lock, color: Colors.white),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _passwordVisible ? Icons.visibility : Icons.visibility_off,
+                    color: Colors.white70,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _passwordVisible = !_passwordVisible;
+                    });
+                  },
+                ),
+                enabledBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white),
+                ),
+                focusedBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.amber),
+                ),
+              ),
+              style: const TextStyle(color: Colors.white),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Por favor, introduce tu contraseña';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 30),
+            if (_errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: Colors.redAccent, fontSize: 14),
+                ),
+              ),
+            _isLoading
+                ? const CircularProgressIndicator()
+                : ElevatedButton(
+                    onPressed: _login,
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.black, backgroundColor: Colors.amber[200],
+                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    child: const Text('Acceder'),
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ProfilePage extends StatelessWidget {
+  const ProfilePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
+
+    return Container(
+      padding: const EdgeInsets.all(24.0),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.7),
+        borderRadius: BorderRadius.circular(12.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.5),
+            spreadRadius: 5,
+            blurRadius: 7,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Perfil de Usuario',
+            style: TextStyle(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 20),
+          const Icon(Icons.account_circle, size: 80, color: Colors.white),
+          const SizedBox(height: 20),
+          const Text(
+            '¡Bienvenido!',
+            style: TextStyle(fontSize: 20, color: Colors.white),
+          ),
+          const SizedBox(height: 30),
+          ElevatedButton(
+            onPressed: () {
+              authProvider.logout();
+            },
+            style: ElevatedButton.styleFrom(
+              foregroundColor: Colors.white, backgroundColor: Colors.redAccent,
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            child: const Text('Cerrar Sesión'),
+          ),
+        ],
       ),
     );
   }
