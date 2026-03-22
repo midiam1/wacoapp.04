@@ -225,7 +225,7 @@ class _MyHomePageState extends State<MyHomePage> {
     final authProvider = Provider.of<AuthProvider>(context);
 
     final List<Widget> widgetOptions = <Widget>[
-      const InfoCard(text: 'Página de Inicio'),
+      const InfoCard(text: 'Miranda'), // UPDATED TEXT
       const InfoCard(text: 'Página de Literatura'),
       authProvider.isAuthenticated ? const ProfilePage() : const LoginPage(),
     ];
@@ -420,14 +420,20 @@ class InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      decoration: BoxDecoration(
-        color: Colors.black.withAlpha(178),
-        borderRadius: BorderRadius.circular(12.0),
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha(128), spreadRadius: 5, blurRadius: 7, offset: const Offset(0, 3))],
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12.0),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.2), 
+            borderRadius: BorderRadius.circular(12.0),
+            border: Border.all(color: Colors.white.withOpacity(0.2)),
+          ),
+          child: Text(text, style: const TextStyle(fontSize: 28, color: Colors.white, fontWeight: FontWeight.bold)),
+        ),
       ),
-      child: Text(text, style: const TextStyle(fontSize: 28, color: Colors.white, fontWeight: FontWeight.bold)),
     );
   }
 }
