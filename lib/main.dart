@@ -44,6 +44,7 @@ class MenuItem {
 
   MenuItem({required this.id, required this.title, required this.url, this.children = const []});
 
+  // Factory from old plugin structure - kept for reference, but not used by new method
   factory MenuItem.fromJson(Map<String, dynamic> json) {
     var children = (json['children'] as List? ?? []).map((child) => MenuItem.fromJson(child)).toList();
     return MenuItem(
@@ -146,21 +147,34 @@ class MenuService {
   final String wordpressUrl = 'https://yosoyve.eterica.website';
 
   Future<List<MenuItem>> fetchMainMenu() async {
-    final url = Uri.parse('$wordpressUrl/wp-json/wp-api-menus/v2/menus/42');
+    // NEW: Fetch pages from the standard WordPress API endpoint.
+    // We order them by 'menu_order' which can be set in the Page Attributes in WordPress.
+    // 'parent=0' ensures we only get top-level pages.
+    final url = Uri.parse('$wordpressUrl/wp-json/wp/v2/pages?orderby=menu_order&order=asc&parent=0');
     try {
       final response = await http.get(url, headers: {'Accept': 'application/json'});
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final List<dynamic> menuItemsJson = data['items'] ?? [];
-        return menuItemsJson.map((json) => MenuItem.fromJson(json)).toList();
+        final List<dynamic> pagesJson = jsonDecode(response.body);
+        
+        // NEW: Map the page objects to our MenuItem class.
+        return pagesJson.map((json) {
+          return MenuItem(
+            id: json['id'],
+            // The title is in a nested object under 'rendered'
+            title: json['title']['rendered'],
+            // The url is the 'link' property
+            url: json['link'],
+          );
+        }).toList();
       } else {
-        throw Exception('Failed to load menu. Plugin installed? Correct menu ID?');
+        throw Exception('Error al cargar las páginas desde WordPress.');
       }
     } catch (e) {
-      throw Exception('Could not fetch menu. Check network or plugin.');
+      throw Exception('No se pudo conectar para obtener las páginas. Revisa tu conexión.');
     }
   }
 }
+
 
 class AuthResult {
   final String? token;
@@ -358,12 +372,14 @@ class _MainDrawerState extends State<MainDrawer> {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(20.0),
-                child: Text('Error al cargar el menú.\nAsegúrate de que el plugin "WP REST API Menus" está instalado y el ID del menú es correcto.', textAlign: TextAlign.center, style: TextStyle(color: Colors.red[300])),
+                // NEW: Updated error message
+                child: Text('Error al cargar el menú.
+Por favor, revisa tu conexión a internet y la configuración de WordPress.', textAlign: TextAlign.center, style: TextStyle(color: Colors.red[300])),
               ),
             );
           }
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('No se encontraron elementos en el menú.', style: TextStyle(color: Colors.white)));
+            return const Center(child: Text('No se encontraron páginas para el menú.', style: TextStyle(color: Colors.white)));
           }
           final menuItems = snapshot.data!;
           return ListView(
