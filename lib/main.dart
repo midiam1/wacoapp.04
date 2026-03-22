@@ -24,36 +24,23 @@ class UserModel {
   final int id;
   final String name;
   final String avatarUrl;
+  // Added to support role-based logic
+  final List<String> roles;
 
-  UserModel({required this.id, required this.name, required this.avatarUrl});
+  UserModel({required this.id, required this.name, required this.avatarUrl, required this.roles});
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: json['id'],
       name: json['name'],
       avatarUrl: json['avatar_urls']['96'],
+      // Ensure roles is always a list of strings
+      roles: List<String>.from(json['roles'] ?? []),
     );
   }
-}
 
-class MenuItem {
-  final int id;
-  final String title;
-  final String url;
-  final List<MenuItem> children;
-
-  MenuItem({required this.id, required this.title, required this.url, this.children = const []});
-
-  // Factory from old plugin structure - kept for reference, but not used by new method
-  factory MenuItem.fromJson(Map<String, dynamic> json) {
-    var children = (json['children'] as List? ?? []).map((child) => MenuItem.fromJson(child)).toList();
-    return MenuItem(
-      id: json['id'],
-      title: json['title'],
-      url: json['url'] ?? '',
-      children: children,
-    );
-  }
+  // Helper to check for a role
+  bool hasRole(String role) => roles.contains(role);
 }
 
 // --- PROVIDERS ---
@@ -130,51 +117,25 @@ class AuthService {
   }
 
   Future<UserModel?> getProfile(String token) async {
+    // The 'context=edit' is crucial to get all user data including roles
     final url = Uri.parse('$wordpressUrl/wp-json/wp/v2/users/me?context=edit');
     try {
       final response = await http.get(
         url,
         headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
       );
-      return response.statusCode == 200 ? UserModel.fromJson(jsonDecode(response.body)) : null;
+      if (response.statusCode == 200) {
+        return UserModel.fromJson(jsonDecode(response.body));
+      } else {
+        // You may want to log the error here
+        return null;
+      }
     } catch (e) {
+      // You may want to log the error here
       return null;
     }
   }
 }
-
-class MenuService {
-  final String wordpressUrl = 'https://yosoyve.eterica.website';
-
-  Future<List<MenuItem>> fetchMainMenu() async {
-    // NEW: Fetch pages from the standard WordPress API endpoint.
-    // We order them by 'menu_order' which can be set in the Page Attributes in WordPress.
-    // 'parent=0' ensures we only get top-level pages.
-    final url = Uri.parse('$wordpressUrl/wp-json/wp/v2/pages?orderby=menu_order&order=asc&parent=0');
-    try {
-      final response = await http.get(url, headers: {'Accept': 'application/json'});
-      if (response.statusCode == 200) {
-        final List<dynamic> pagesJson = jsonDecode(response.body);
-        
-        // NEW: Map the page objects to our MenuItem class.
-        return pagesJson.map((json) {
-          return MenuItem(
-            id: json['id'],
-            // The title is in a nested object under 'rendered'
-            title: json['title']['rendered'],
-            // The url is the 'link' property
-            url: json['link'],
-          );
-        }).toList();
-      } else {
-        throw Exception('Error al cargar las páginas desde WordPress.');
-      }
-    } catch (e) {
-      throw Exception('No se pudo conectar para obtener las páginas. Revisa tu conexión.');
-    }
-  }
-}
-
 
 class AuthResult {
   final String? token;
@@ -225,7 +186,7 @@ class _MyHomePageState extends State<MyHomePage> {
     final authProvider = Provider.of<AuthProvider>(context);
 
     final List<Widget> widgetOptions = <Widget>[
-      const InfoCard(text: 'Miranda'), // UPDATED TEXT
+      const InfoCard(text: 'Miranda'),
       const InfoCard(text: 'Página de Literatura'),
       authProvider.isAuthenticated ? const ProfilePage() : const LoginPage(),
     ];
@@ -234,7 +195,7 @@ class _MyHomePageState extends State<MyHomePage> {
       extendBodyBehindAppBar: true,
       extendBody: true,
       appBar: AppBar(
-        backgroundColor: Colors.transparent, // Sigue siendo transparente
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: authProvider.isAuthenticated
             ? Builder(
@@ -341,74 +302,95 @@ class _MyHomePageState extends State<MyHomePage> {
 }
 
 // --- CUSTOM WIDGETS ---
-class MainDrawer extends StatefulWidget {
+class MainDrawer extends StatelessWidget {
   const MainDrawer({super.key});
 
   @override
-  State<MainDrawer> createState() => _MainDrawerState();
-}
-
-class _MainDrawerState extends State<MainDrawer> {
-  late Future<List<MenuItem>> _menuFuture;
-  final MenuService _menuService = MenuService();
-
-  @override
-  void initState() {
-    super.initState();
-    _menuFuture = _menuService.fetchMainMenu();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
+    final user = authProvider.user;
+
+    // Helper function to create a ListTile and handle navigation
+    Widget _buildMenuTile({required String title, required IconData icon, required VoidCallback onTap}) {
+      return ListTile(
+        leading: Icon(icon, color: Colors.white70),
+        title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        onTap: () {
+          Navigator.pop(context); // Close the drawer
+          onTap(); // Execute the specific action
+        },
+      );
+    }
+
     return Drawer(
       backgroundColor: Colors.black.withOpacity(0.85),
-      child: FutureBuilder<List<MenuItem>>(
-        future: _menuFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Colors.white));
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                // FIX: Use a single line string with \n for the line break
-                child: Text('Error al cargar el menú.\nPor favor, revisa tu conexión a internet y la configuración de WordPress.', textAlign: TextAlign.center, style: TextStyle(color: Colors.red[300])),
-              ),
-            );
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('No se encontraron páginas para el menú.', style: TextStyle(color: Colors.white)));
-          }
-          final menuItems = snapshot.data!;
-          return ListView(
-            padding: EdgeInsets.zero,
-            children: [
-              DrawerHeader(decoration: BoxDecoration(color: Colors.amber.withOpacity(0.1)), child: Center(child: Image.asset('assets/images/Logo.png', height: 80))),
-              ...menuItems.map((item) => ListTile(
-                    leading: const Icon(Icons.link, color: Colors.white70),
-                    title: Text(item.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    onTap: () {
-                      Navigator.pop(context);
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          DrawerHeader(
+            decoration: BoxDecoration(color: Colors.amber.withOpacity(0.1)),
+            child: Center(child: Image.asset('assets/images/Logo.png', height: 80)),
+          ),
 
-                      if (item.url.isNotEmpty) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ContentPage(url: item.url, title: item.title),
-                          ),
-                        );
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Este elemento no tiene una página asociada.')),
-                        );
-                      }
-                    },
-                  ))
-                  .toList(),
-            ],
-          );
-        },
+          // --- MENU ITEMS ---
+
+          // Example: Item visible to everyone
+          _buildMenuTile(
+            title: 'Formulario Base Electoral 2026',
+            icon: Icons.how_to_vote,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ContentPage(
+                    url: 'https://yosoyve.eterica.website/demo-formulario-base-electoral-2026/',
+                    title: 'Formulario Electoral',
+                  ),
+                ),
+              );
+            },
+          ),
+
+          // Example: Item for Transcriptores, Editors, and Administrators
+          if (user != null && (user.hasRole('transcriptor') || user.hasRole('editor') || user.hasRole('administrator')))
+            _buildMenuTile(
+              title: 'Panel de Transcripción',
+              icon: Icons.edit_document,
+              onTap: () {
+                // TODO: Navigate to the Transcription Panel page
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Acceso a Panel de Transcripción (Próximamente)')),
+                );
+              },
+            ),
+
+          // Example: Item ONLY for Editors and Administrators
+          if (user != null && (user.hasRole('editor') || user.hasRole('administrator')))
+            _buildMenuTile(
+              title: 'Validar Contenido',
+              icon: Icons.check_circle_outline,
+              onTap: () {
+                // TODO: Navigate to the Validation page
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Acceso a Validación de Contenido (Próximamente)')),
+                );
+              },
+            ),
+            
+          // Example: Item ONLY for Administrators
+          if (user != null && user.hasRole('administrator'))
+            _buildMenuTile(
+              title: 'Administración General',
+              icon: Icons.admin_panel_settings,
+              onTap: () {
+                // TODO: Navigate to the Admin page
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Acceso a Administración (Próximamente)')),
+                );
+              },
+            ),
+
+        ],
       ),
     );
   }
@@ -427,7 +409,7 @@ class InfoCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.2), 
+            color: Colors.black.withOpacity(0.2),
             borderRadius: BorderRadius.circular(12.0),
             border: Border.all(color: Colors.white.withOpacity(0.2)),
           ),
@@ -449,7 +431,7 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  
+
   bool _isLoading = false;
   String? _errorMessage;
   bool _passwordVisible = false;
@@ -467,59 +449,97 @@ class _LoginPageState extends State<LoginPage> {
 
     if (!mounted) return;
 
-    if (!success) {
-       setState(() {
+    if (success) {
+      // Login was successful, ProfilePage will be shown
+    } else {
+      setState(() {
         _isLoading = false;
         _errorMessage = "Usuario o contraseña incorrectos.";
       });
     }
   }
 
- @override
-Widget build(BuildContext context) {
-  return Stack(
-    children: [
-      SingleChildScrollView(
-        child: Container(
-          padding: const EdgeInsets.all(24.0),
-          decoration: BoxDecoration(
-            color: Colors.black.withAlpha(178),
-            borderRadius: BorderRadius.circular(12.0),
-            boxShadow: [BoxShadow(color: Colors.black.withAlpha(128), spreadRadius: 5, blurRadius: 7, offset: const Offset(0, 3))],
-          ),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Acceso de Usuario', style: TextStyle(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 20),
-                TextFormField(
-                  controller: _usernameController,
-                  decoration: const InputDecoration(labelText: 'Usuario o Email', labelStyle: TextStyle(color: Colors.white), prefixIcon: Icon(Icons.person, color: Colors.white), enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white)), focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.amber))),
-                  style: const TextStyle(color: Colors.white),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Por favor, introduce tu usuario' : null,
-                ),
-                const SizedBox(height: 20),
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: !_passwordVisible,
-                  decoration: InputDecoration(labelText: 'Contraseña', labelStyle: const TextStyle(color: Colors.white), prefixIcon: const Icon(Icons.lock, color: Colors.white), suffixIcon: IconButton(icon: Icon(_passwordVisible ? Icons.visibility : Icons.visibility_off, color: Colors.white70), onPressed: () => setState(() => _passwordVisible = !_passwordVisible)), enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white)), focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.amber))),
-                  style: const TextStyle(color: Colors.white),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Por favor, introduce tu contraseña' : null,
-                ),
-                const SizedBox(height: 30),
-                if (_errorMessage != null) Padding(padding: const EdgeInsets.only(bottom: 10), child: Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent, fontSize: 14), textAlign: TextAlign.center)),
-                ElevatedButton(onPressed: _isLoading ? null : _login, style: ElevatedButton.styleFrom(foregroundColor: Colors.black, backgroundColor: Colors.amber[200], disabledBackgroundColor: Colors.amber[200]?.withOpacity(0.5), disabledForegroundColor: Colors.black.withOpacity(0.7), padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15), textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), child: const Text('Acceder')),
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        SingleChildScrollView(
+          child: Container(
+            padding: const EdgeInsets.all(24.0),
+            decoration: BoxDecoration(
+              color: Colors.black.withAlpha(178),
+              borderRadius: BorderRadius.circular(12.0),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(128),
+                  spreadRadius: 5,
+                  blurRadius: 7,
+                  offset: const Offset(0, 3),
+                )
               ],
+            ),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Acceso de Usuario', style: TextStyle(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: _usernameController,
+                    decoration: const InputDecoration(labelText: 'Usuario o Email', labelStyle: TextStyle(color: Colors.white), prefixIcon: Icon(Icons.person, color: Colors.white), enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white)), focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.amber))),
+                    style: const TextStyle(color: Colors.white),
+                    validator: (v) => (v == null || v.isEmpty) ? 'Por favor, introduce tu usuario' : null,
+                  ),
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: !_passwordVisible,
+                    decoration: InputDecoration(
+                      labelText: 'Contraseña',
+                      labelStyle: const TextStyle(color: Colors.white),
+                      prefixIcon: const Icon(Icons.lock, color: Colors.white),
+                      suffixIcon: IconButton(
+                        icon: Icon(_passwordVisible ? Icons.visibility : Icons.visibility_off, color: Colors.white70),
+                        onPressed: () => setState(() => _passwordVisible = !_passwordVisible),
+                      ),
+                      enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white)),
+                      focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.amber)),
+                    ),
+                    style: const TextStyle(color: Colors.white),
+                    validator: (v) => (v == null || v.isEmpty) ? 'Por favor, introduce tu contraseña' : null,
+                  ),
+                  const SizedBox(height: 30),
+                  if (_errorMessage != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent, fontSize: 14), textAlign: TextAlign.center),
+                    ),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _login,
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.black,
+                      backgroundColor: Colors.amber[200],
+                      disabledBackgroundColor: Colors.amber[200]?.withOpacity(0.5),
+                      disabledForegroundColor: Colors.black.withOpacity(0.7),
+                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    child: const Text('Acceder'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ),
-      if (_isLoading) BackdropFilter(filter: ImageFilter.blur(sigmaX: 4.0, sigmaY: 4.0), child: Container(color: Colors.black.withOpacity(0.2), child: const Center(child: CircularProgressIndicator(color: Colors.white, strokeWidth: 5.0)))),
-    ],
-  );
-}
+        if (_isLoading)
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 4.0, sigmaY: 4.0),
+            child: Container(color: Colors.black.withOpacity(0.2), child: const Center(child: CircularProgressIndicator(color: Colors.white, strokeWidth: 5.0))),
+          ),
+      ],
+    );
+  }
 }
 
 class ProfilePage extends StatelessWidget {
@@ -549,6 +569,9 @@ class ProfilePage extends StatelessWidget {
             CircleAvatar(radius: 50, backgroundImage: NetworkImage(user.avatarUrl), backgroundColor: Colors.grey[800]),
             const SizedBox(height: 20),
             Text(user.name, style: const TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            // Display the user roles
+            Text(user.roles.join(', ').toUpperCase(), style: const TextStyle(fontSize: 14, color: Colors.white70, fontStyle: FontStyle.italic)),
             const SizedBox(height: 20),
             const Divider(color: Colors.white54),
             const SizedBox(height: 10),
@@ -562,10 +585,24 @@ class ProfilePage extends StatelessWidget {
   Widget _buildMenu(BuildContext context, AuthProvider authProvider) {
     return Column(
       children: [
-        ListTile(leading: const Icon(Icons.edit, color: Colors.white), title: const Text('Editar Perfil', style: TextStyle(color: Colors.white)), trailing: const Icon(Icons.chevron_right, color: Colors.white), onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Función aún no implementada.')))),
-        ListTile(leading: const Icon(Icons.settings, color: Colors.white), title: const Text('Configuración', style: TextStyle(color: Colors.white)), trailing: const Icon(Icons.chevron_right, color: Colors.white), onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Función aún no implementada.')))),
+        ListTile(
+          leading: const Icon(Icons.edit, color: Colors.white),
+          title: const Text('Editar Perfil', style: TextStyle(color: Colors.white)),
+          trailing: const Icon(Icons.chevron_right, color: Colors.white),
+          onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Función aún no implementada.'))),
+        ),
+        ListTile(
+          leading: const Icon(Icons.settings, color: Colors.white),
+          title: const Text('Configuración', style: TextStyle(color: Colors.white)),
+          trailing: const Icon(Icons.chevron_right, color: Colors.white),
+          onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Función aún no implementada.'))),
+        ),
         const Divider(color: Colors.white54),
-        ListTile(leading: const Icon(Icons.logout, color: Colors.redAccent), title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.redAccent)), onTap: () => authProvider.logout()),
+        ListTile(
+          leading: const Icon(Icons.logout, color: Colors.redAccent),
+          title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.redAccent)),
+          onTap: () => authProvider.logout(),
+        ),
       ],
     );
   }
