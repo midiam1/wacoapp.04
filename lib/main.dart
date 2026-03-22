@@ -372,9 +372,8 @@ class _MainDrawerState extends State<MainDrawer> {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(20.0),
-                // NEW: Updated error message
-                child: Text('Error al cargar el menú.
-Por favor, revisa tu conexión a internet y la configuración de WordPress.', textAlign: TextAlign.center, style: TextStyle(color: Colors.red[300])),
+                // FIX: Use a single line string with \n for the line break
+                child: Text('Error al cargar el menú.\nPor favor, revisa tu conexión a internet y la configuración de WordPress.', textAlign: TextAlign.center, style: TextStyle(color: Colors.red[300])),
               ),
             );
           }
