@@ -38,6 +38,7 @@ dependencies:
   flutter_native_splash: ^2.4.7
   http: ^1.6.0
   provider: ^6.1.5+1
+  webview_flutter: ^4.13.1
 
 dev_dependencies:
   flutter_test:
@@ -71,6 +72,10 @@ flutter:
 flutter_native_splash:
   color: "#1C1C1C"
   image: assets/logo/logoguaco.png
+
+  android_12:
+    color: "#1C1C1C"
+    image: assets/logo/logoguaco.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
