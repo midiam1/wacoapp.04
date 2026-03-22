@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Agrega el permiso de Internet aquí -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
         android:label="Waco 0.4"
         android:name="${applicationName}"

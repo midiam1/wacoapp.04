@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
@@ -36,7 +35,6 @@ class AuthProvider extends ChangeNotifier {
   }
 }
 
-
 class WacoApp extends StatelessWidget {
   const WacoApp({super.key});
 
@@ -69,13 +67,18 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Widget _getUserPage(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
-    return authProvider.isAuthenticated ? const ProfilePage() : const LoginPage();
+    return authProvider.isAuthenticated
+        ? const ProfilePage()
+        : const LoginPage();
   }
 
   @override
   void initState() {
     super.initState();
-    _dateTimeStream = Stream.periodic(const Duration(seconds: 1), (_) => DateTime.now());
+    _dateTimeStream = Stream.periodic(
+      const Duration(seconds: 1),
+      (_) => DateTime.now(),
+    );
   }
 
   void _onItemTapped(int index) {
@@ -91,12 +94,21 @@ class _MyHomePageState extends State<MyHomePage> {
         return BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: AlertDialog(
-            backgroundColor: Colors.black.withOpacity(0.5),
-            title: const Text('Acerca de Waco 0.4', style: TextStyle(color: Colors.white)),
-            content: const Text('Esta es una aplicación de demostración de Flutter.', style: TextStyle(color: Colors.white)),
+            backgroundColor: Colors.black.withAlpha(128),
+            title: const Text(
+              'Acerca de Waco 0.4',
+              style: TextStyle(color: Colors.white),
+            ),
+            content: const Text(
+              'Esta es una aplicación de demostración de Flutter.',
+              style: TextStyle(color: Colors.white),
+            ),
             actions: <Widget>[
               TextButton(
-                child: const Text('Cerrar', style: TextStyle(color: Colors.white)),
+                child: const Text(
+                  'Cerrar',
+                  style: TextStyle(color: Colors.white),
+                ),
                 onPressed: () {
                   Navigator.of(context).pop();
                 },
@@ -132,7 +144,11 @@ class _MyHomePageState extends State<MyHomePage> {
             Expanded(
               child: Text(
                 widget.title,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -146,8 +162,21 @@ class _MyHomePageState extends State<MyHomePage> {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(timeString, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                      Text(dateString, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                      Text(
+                        timeString,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        dateString,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   );
                 } else {
@@ -165,24 +194,13 @@ class _MyHomePageState extends State<MyHomePage> {
             fit: BoxFit.cover,
           ),
         ),
-        child: Center(
-          child: widgetOptions.elementAt(_selectedIndex),
-        ),
+        child: Center(child: widgetOptions.elementAt(_selectedIndex)),
       ),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Inicio',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.book),
-            label: 'Literatura',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Usuario',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
+          BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Literatura'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Usuario'),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.amber[200],
@@ -205,11 +223,11 @@ class InfoCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.7),
+        color: Colors.black.withAlpha(178),
         borderRadius: BorderRadius.circular(12.0),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.5),
+            color: Colors.black.withAlpha(128),
             spreadRadius: 5,
             blurRadius: 7,
             offset: const Offset(0, 3),
@@ -218,10 +236,24 @@ class InfoCard extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: const TextStyle(fontSize: 28, color: Colors.white, fontWeight: FontWeight.bold),
+        style: const TextStyle(
+          fontSize: 28,
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
+}
+
+// Clase para encapsular el resultado de la autenticación
+class AuthResult {
+  final String? token;
+  final String? error;
+
+  AuthResult({this.token, this.error});
+
+  bool get hasError => error != null;
 }
 
 class AuthService {
@@ -229,26 +261,32 @@ class AuthService {
 
   AuthService(this.wordpressUrl);
 
-  Future<String?> login(String username, String password) async {
+  Future<AuthResult> login(String username, String password) async {
     final url = Uri.parse('$wordpressUrl/wp-json/jwt-auth/v1/token');
     try {
       final response = await http.post(
         url,
-        body: {
+        headers: {
+          'Content-Type': 'application/json; charset=UTF-8',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode(<String, String>{
           'username': username,
           'password': password,
-        },
+        }),
       );
 
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
-        return body['token'];
+        return AuthResult(token: body['token']);
       } else {
-        return null;
+        // Devuelve el error real del servidor
+        String errorMessage = 'Error ${response.statusCode}: ${response.body}';
+        return AuthResult(error: errorMessage);
       }
     } catch (e) {
-      print('Error during login: $e');
-      return null;
+      // Devuelve la excepción de red
+      return AuthResult(error: 'Error de Red: $e');
     }
   }
 }
@@ -277,20 +315,23 @@ class _LoginPageState extends State<LoginPage> {
         _errorMessage = null;
       });
 
-      final token = await _authService.login(
+      final result = await _authService.login(
         _usernameController.text,
         _passwordController.text,
       );
+
+      if (!mounted) return; // mounted check
 
       setState(() {
         _isLoading = false;
       });
 
-      if (token != null) {
-        Provider.of<AuthProvider>(context, listen: false).login(token);
+      if (result.token != null && !result.hasError) {
+        Provider.of<AuthProvider>(context, listen: false).login(result.token!);
       } else {
         setState(() {
-          _errorMessage = 'Usuario o contraseña incorrectos.';
+          // Muestra el error detallado en la UI
+          _errorMessage = result.error ?? 'Ocurrió un error desconocido.';
         });
       }
     }
@@ -298,106 +339,125 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24.0),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.7),
-        borderRadius: BorderRadius.circular(12.0),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.5),
-            spreadRadius: 5,
-            blurRadius: 7,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Acceso de Usuario',
-              style: TextStyle(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold),
+    return SingleChildScrollView(
+      child: Container(
+        padding: const EdgeInsets.all(24.0),
+        decoration: BoxDecoration(
+          color: Colors.black.withAlpha(178),
+          borderRadius: BorderRadius.circular(12.0),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(128),
+              spreadRadius: 5,
+              blurRadius: 7,
+              offset: const Offset(0, 3),
             ),
-            const SizedBox(height: 20),
-            TextFormField(
-              controller: _usernameController,
-              decoration: const InputDecoration(
-                labelText: 'Usuario o Email',
-                labelStyle: TextStyle(color: Colors.white),
-                prefixIcon: Icon(Icons.person, color: Colors.white),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white),
-                ),
-                focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.amber),
-                ),
-              ),
-              style: const TextStyle(color: Colors.white),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Por favor, introduce tu usuario';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 20),
-            TextFormField(
-              controller: _passwordController,
-              obscureText: !_passwordVisible,
-              decoration: InputDecoration(
-                labelText: 'Contraseña',
-                labelStyle: const TextStyle(color: Colors.white),
-                prefixIcon: const Icon(Icons.lock, color: Colors.white),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _passwordVisible ? Icons.visibility : Icons.visibility_off,
-                    color: Colors.white70,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _passwordVisible = !_passwordVisible;
-                    });
-                  },
-                ),
-                enabledBorder: const UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white),
-                ),
-                focusedBorder: const UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.amber),
-                ),
-              ),
-              style: const TextStyle(color: Colors.white),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Por favor, introduce tu contraseña';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 30),
-            if (_errorMessage != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text(
-                  _errorMessage!,
-                  style: const TextStyle(color: Colors.redAccent, fontSize: 14),
-                ),
-              ),
-            _isLoading
-                ? const CircularProgressIndicator()
-                : ElevatedButton(
-                    onPressed: _login,
-                    style: ElevatedButton.styleFrom(
-                      foregroundColor: Colors.black, backgroundColor: Colors.amber[200],
-                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    child: const Text('Acceder'),
-                  ),
           ],
+        ),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Acceso de Usuario',
+                style: TextStyle(
+                  fontSize: 24,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _usernameController,
+                decoration: const InputDecoration(
+                  labelText: 'Usuario o Email',
+                  labelStyle: TextStyle(color: Colors.white),
+                  prefixIcon: Icon(Icons.person, color: Colors.white),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white),
+                  ),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.amber),
+                  ),
+                ),
+                style: const TextStyle(color: Colors.white),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Por favor, introduce tu usuario';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _passwordController,
+                obscureText: !_passwordVisible,
+                decoration: InputDecoration(
+                  labelText: 'Contraseña',
+                  labelStyle: const TextStyle(color: Colors.white),
+                  prefixIcon: const Icon(Icons.lock, color: Colors.white),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _passwordVisible
+                          ? Icons.visibility
+                          : Icons.visibility_off,
+                      color: Colors.white70,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _passwordVisible = !_passwordVisible;
+                      });
+                    },
+                  ),
+                  enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white),
+                  ),
+                  focusedBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.amber),
+                  ),
+                ),
+                style: const TextStyle(color: Colors.white),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Por favor, introduce tu contraseña';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 30),
+              if (_errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text(
+                    _errorMessage!,
+                    style: const TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              _isLoading
+                  ? const CircularProgressIndicator()
+                  : ElevatedButton(
+                      onPressed: _login,
+                      style: ElevatedButton.styleFrom(
+                        foregroundColor: Colors.black,
+                        backgroundColor: Colors.amber[200],
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 40,
+                          vertical: 15,
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      child: const Text('Acceder'),
+                    ),
+            ],
+          ),
         ),
       ),
     );
@@ -414,11 +474,11 @@ class ProfilePage extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24.0),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.7),
+        color: Colors.black.withAlpha(178),
         borderRadius: BorderRadius.circular(12.0),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.5),
+            color: Colors.black.withAlpha(128),
             spreadRadius: 5,
             blurRadius: 7,
             offset: const Offset(0, 3),
@@ -430,7 +490,11 @@ class ProfilePage extends StatelessWidget {
         children: [
           const Text(
             'Perfil de Usuario',
-            style: TextStyle(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 24,
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 20),
           const Icon(Icons.account_circle, size: 80, color: Colors.white),
@@ -445,9 +509,13 @@ class ProfilePage extends StatelessWidget {
               authProvider.logout();
             },
             style: ElevatedButton.styleFrom(
-              foregroundColor: Colors.white, backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              backgroundColor: Colors.redAccent,
               padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              textStyle: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             child: const Text('Cerrar Sesión'),
           ),
