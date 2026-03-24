@@ -152,9 +152,9 @@ class WacoApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Waco 0.4',
+      title: 'Demo Miranda Waco 0.4',
       theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple), useMaterial3: true),
-      home: const MyHomePage(title: 'Waco 0.4'),
+      home: const MyHomePage(title: 'Demo Miranda Waco 0.4'),
     );
   }
 }
@@ -186,7 +186,7 @@ class _MyHomePageState extends State<MyHomePage> {
     final authProvider = Provider.of<AuthProvider>(context);
 
     final List<Widget> widgetOptions = <Widget>[
-      const InfoCard(text: 'Miranda'),
+      const InfoCard(text: 'Demo Núcleo Miranda'),
       const InfoCard(text: 'Página de Literatura'),
       authProvider.isAuthenticated ? const ProfilePage() : const LoginPage(),
     ];
@@ -286,7 +286,7 @@ class _MyHomePageState extends State<MyHomePage> {
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: AlertDialog(
             backgroundColor: Colors.black.withAlpha(128),
-            title: const Text('Acerca de Waco 0.4', style: TextStyle(color: Colors.white)),
+            title: const Text('Acerca de Demo Miranda Waco 0.4', style: TextStyle(color: Colors.white)),
             content: const Text('Esta es una aplicación de demostración de Flutter.', style: TextStyle(color: Colors.white)),
             actions: <Widget>[
               TextButton(
